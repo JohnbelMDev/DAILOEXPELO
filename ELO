@@ -1,0 +1,79 @@
+# snowflake_data_retrieval.py
+
+import os
+import snowflake.connector
+import logging
+from typing import Any, Dict, List, Union
+
+# Set up logging for traceability
+logging.basicConfig(
+    filename="snowflake_query.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+def get_snowflake_connection() -> snowflake.connector.SnowflakeConnection:
+    """
+    Establishes a connection to Snowflake using environment variables for credentials.
+    """
+    try:
+        conn = snowflake.connector.connect(
+            user=os.getenv("SNOWFLAKE_USER"),
+            password=os.getenv("SNOWFLAKE_PASSWORD"),
+            account=os.getenv("SNOWFLAKE_ACCOUNT"),
+            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
+            database=os.getenv("SNOWFLAKE_DATABASE"),
+            schema=os.getenv("SNOWFLAKE_SCHEMA"),
+        )
+        logging.info("Successfully connected to Snowflake.")
+        return conn
+    except snowflake.connector.errors.Error as e:
+        logging.error(f"Failed to connect to Snowflake: {e}")
+        raise
+
+def execute_query(conn: snowflake.connector.SnowflakeConnection, query: str, params: Union[None, Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """
+    Executes a parameterized query securely and returns the results.
+    """
+    try:
+        cursor = conn.cursor()
+        logging.info(f"Executing query: {query}")
+        cursor.execute(query, params or {})
+        columns = [col[0] for col in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        logging.info("Query executed successfully.")
+        return results
+    except snowflake.connector.errors.Error as e:
+        logging.error(f"Query execution failed: {e}")
+        raise
+    finally:
+        cursor.close()
+
+def main():
+    """
+    Main function to retrieve data from Snowflake.
+    """
+    # Example query
+    query = """
+    SELECT *
+    FROM your_table
+    WHERE your_column = %(value)s
+    """
+    params = {"value": "example_value"}
+    
+    conn = None
+    try:
+        conn = get_snowflake_connection()
+        data = execute_query(conn, query, params)
+        print("Query Results:")
+        for row in data:
+            print(row)
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+    finally:
+        if conn:
+            conn.close()
+            logging.info("Snowflake connection closed.")
+
+if __name__ == "__main__":
+    main()
